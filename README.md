@@ -1,0 +1,1 @@
+We run the server side with command _node server.js_
