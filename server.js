@@ -28,9 +28,9 @@ app.use("/api/", require("./app/routes/index"));
 
 //******************** Listen *********************//
 
-app.use(express.static(__dirname + "/public/dist/client"));
+app.use(express.static(__dirname + "/public/client"));
 app.get("*", function (req, res) {
-	res.sendFile(path.join(__dirname + "/public/dist/client/index.html"));
+	res.sendFile(path.join(__dirname + "/public/client/index.html"));
 });
 
 app.listen(process.env.PORT, () => {
