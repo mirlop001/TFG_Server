@@ -1,17 +1,16 @@
+require("./config/db.config");
+
 const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
-const database = require("./config/database");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const path = require("path");
 const { env } = require("process");
 
-//******************** Configuration *********************//
-mongoose.connect(database.url);
-
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: false }));
+
 app.use(bodyParser.json());
 
 app.use(function (req, res, next) {
@@ -23,15 +22,24 @@ app.use(function (req, res, next) {
 	next();
 });
 
-//******************** Routes *********************//
-app.use("/api/", require("./app/routes/index"));
+app.use("/api/", require("./routes/index"));
 
-//******************** Listen *********************//
+var distDir = __dirname + "/public/dist/";
+app.use(express.static(distDir));
 
-app.use(express.static(__dirname + "/public/client"));
-app.get("*", function (req, res) {
-	res.sendFile(path.join(__dirname + "/public/client/index.html"));
-});
+mongoose.connect(
+	process.env.URLDB,
+	{
+		useNewUrlParser: true,
+		useCreateIndex: true,
+		useUnifiedTopology: true,
+	},
+	(err) => {
+		if (err) throw err;
+
+		console.log("Base de datos online");
+	}
+);
 
 app.listen(process.env.PORT, () => {
 	console.log("Escuchando en puerto " + env.PORT);
