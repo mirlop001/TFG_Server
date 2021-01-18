@@ -7,7 +7,7 @@ if (process.env.NODE_ENV === "dev") {
 	urlDB = "mongodb://localhost:27017/sokery_db";
 } else {
 	urlDB =
-		"mongodb+srv://mirlop01:Mufasa12.@mirlop01tfg.ku8e6.mongodb.net/mirlop'1?retryWrites=true&w=majority";
+		"mongodb+srv://mirlop01:Mufasa12.@mirlop01tfg.ku8e6.mongodb.net/mirlop01tfg_db?retryWrites=true&w=majority";
 }
 
 process.env.URLDB = urlDB;
