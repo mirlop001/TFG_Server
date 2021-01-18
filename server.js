@@ -22,7 +22,7 @@ app.use(function (req, res, next) {
 	next();
 });
 
-app.use("/api/", require(".app/routes/index"));
+app.use("/api/", require("./app/routes/index"));
 
 var distDir = __dirname + "/public/client/";
 app.use(express.static(distDir));
