@@ -24,7 +24,7 @@ app.use(function (req, res, next) {
 
 app.use("/api/", require("./routes/index"));
 
-var distDir = __dirname + "/public/dist/";
+var distDir = __dirname + "/public/client/";
 app.use(express.static(distDir));
 
 mongoose.connect(
