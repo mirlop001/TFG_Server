@@ -114,11 +114,12 @@ exports.saveMeal = (req, res) => {
 	let { meals, mealType } = req.body;
 	let newMealList = [];
 	let date = new Date();
+	let foodItem = meal.foodItem ? meal.foodItem._id : null;
 
 	meals.forEach((meal) => {
 		if (meal.grams) {
 			let mealItem = new MealModel({
-				foodItem: meal.foodItem?._id,
+				foodItem: foodItem,
 				grams: meal.grams,
 				user: user,
 			});
