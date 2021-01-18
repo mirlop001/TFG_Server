@@ -12,6 +12,11 @@ const InsulinTypeModel = require("../models/Insulin/insulin-types");
 const RequiredActionModel = require("../models/User/required-actions");
 const ActionResponseModel = require("../models/User/action-response");
 
+const ACTION_TYPES = {
+	GLUCOSA_AYUNAS: 1,
+	INSULINA: 3,
+};
+
 exports.getMealsByDate = function (req, res) {
 	var user = req.headers.user;
 	var { date } = req.body;
@@ -76,7 +81,7 @@ exports.saveGlucose = (req, res) => {
 
 	newModel.save();
 
-	let val = GlucoseDiaryModel.findOneAndUpdate(
+	GlucoseDiaryModel.findOneAndUpdate(
 		{
 			user: mongoose.Types.ObjectId(user),
 
@@ -96,7 +101,12 @@ exports.saveGlucose = (req, res) => {
 	)
 		.then((result) => {
 			if (!result.lastErrorObject.updatedExisting) {
-				this.manageRequiredActions(1, user, false, res);
+				this.manageRequiredActions(
+					ACTION_TYPES.GLUCOSA_AYUNAS,
+					user,
+					res,
+					false
+				);
 			}
 
 			// if (result.length == 0) {
@@ -269,8 +279,8 @@ exports.getInsulinTypes = (req, res) => {
 };
 
 exports.saveInsulin = (req, res) => {
-	var user = req.headers.user;
-	var { type, quantity, requiredAction } = req.body;
+	var user = mongoose.Types.ObjectId(req.headers.user);
+	var { type, quantity } = req.body;
 
 	var newEntry = new InsulinDiaryModel({
 		type: type,
@@ -280,43 +290,26 @@ exports.saveInsulin = (req, res) => {
 
 	try {
 		newEntry.save();
-
-		if (requiredAction) {
-			RequiredActionModel.findOneAndUpdate(
-				{ user: user, fulfilled: false, type: requiredAction._id },
-				{ fulfilled: true }
-			).then((reqActionRes) => {
-				if (reqActionRes) {
-					ActionModel.findOne({ type: 6 }).then((action) => {
-						action.createdAt = moment();
-						let newAction = new RequiredActionModel({
-							fulfilled: false,
-							type: action._id,
-							user: user,
-						});
-						newAction.save();
-
-						res.send({ message: action });
-					});
-				} else res.send(newEntry);
-			});
-		}
+		this.manageRequiredActions(ACTION_TYPES.INSULINA, user, res);
 	} catch (err) {
 		res.status(500).send(err);
 	}
 };
 
 /**************** PRIVATE FUNCTIONS ****************/
-exports.manageRequiredActions = (nextActionType, user, fulfilled, res) => {
-	ActionResponseModel.findOne({ type: nextActionType }).then((actionRes) => {
-		var newAction = new RequiredActionModel({
-			type: actionRes._id,
-			user: user,
-			fulfilled: fulfilled,
-			status: actionRes.status,
-		});
+exports.manageRequiredActions = (actionType, user, res, fulfilled) => {
+	ActionResponseModel.findOne({ type: actionType }).then((actionRes) => {
+		if (actionRes.nexAction) {
+			var newAction = new RequiredActionModel({
+				type: actionRes._id,
+				user: user,
+				fulfilled: fulfilled,
+				status: actionRes.status,
+			});
 
-		newAction.save();
+			newAction.save();
+		}
+
 		res.send(actionRes);
 	});
 };
