@@ -88,7 +88,7 @@ exports.getGlucoseDiaryByDate = (req, res) => {
 	})
 		.populate("glucoseList")
 		.then((glucoseDiary) => {
-			res.send(glucoseDiary?.glucoseList);
+			res.send(glucoseDiary ? glucoseDiary.glucoseList : null);
 		})
 		.catch((err) => {
 			res.status(500).send({
