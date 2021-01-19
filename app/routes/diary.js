@@ -4,13 +4,14 @@ const diaryController = require("../controllers/diary.controller");
 const app = express();
 
 //GET
-app.get("/insulin", diaryController.getInsulinTypes);
+app.get("/insulin/types", diaryController.getInsulinTypes);
 
 //POSTS
-app.post("/diary/meals", diaryController.getMealsByDate);
-app.post("/diary/insulin", diaryController.getInsulinDiaryByDate);
+app.post("/meal-diary", diaryController.getMealsByDate);
+app.post("/insulin-diary", diaryController.getInsulinDiaryByDate);
+app.post("/glucose-diary", diaryController.getGlucoseDiaryByDate);
 
-app.post("/glucose-diary", diaryController.saveGlucose);
-app.post("/insulin-diary", diaryController.saveInsulin);
+app.post("/glucose", diaryController.saveGlucose);
+app.post("/insulin", diaryController.saveInsulin);
 
 module.exports = app;

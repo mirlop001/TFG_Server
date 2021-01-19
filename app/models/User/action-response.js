@@ -13,6 +13,7 @@ var schema = new mongoose.Schema(
 		examples: { type: [String] },
 		status: { type: String },
 		isAction: { type: Boolean },
+		nextAction: { type: Number },
 	},
 	{ timestamps: true }
 );

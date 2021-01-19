@@ -4,7 +4,7 @@ const tableName = "glucose";
 
 var schema = new mongoose.Schema(
 	{
-		value: { type: Number, required: true },
+		glucose: { type: Number, required: true },
 		comments: { type: String, required: false },
 	},
 	{ timestamps: true }

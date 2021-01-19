@@ -3,8 +3,8 @@ const mongoose = require("mongoose");
 
 const MealDiaryModel = require("../models/Meals/meal-diary");
 
-const GlucoseDiaryModel = require("../models/Glucose/glucose-diary");
 const GlucoseModel = require("../models/Glucose/glucose");
+const GlucoseDiaryModel = require("../models/Glucose/glucose-diary");
 
 const InsulinDiaryModel = require("../models/Insulin/insulin-diary");
 const InsulinTypeModel = require("../models/Insulin/insulin-types");
@@ -24,7 +24,7 @@ exports.getMealsByDate = function (req, res) {
 	MealDiaryModel.find({
 		user: mongoose.Types.ObjectId(user),
 
-		date: {
+		createdAt: {
 			$gte: moment(date).startOf("day"),
 			$lt: moment(date).endOf("day"),
 		},
@@ -32,7 +32,7 @@ exports.getMealsByDate = function (req, res) {
 		.populate({
 			path: "mealList",
 			populate: {
-				path: "foodType",
+				path: "foodItem",
 			},
 		})
 		.then((mealList) => {
@@ -54,10 +54,41 @@ exports.getInsulinDiaryByDate = (req, res) => {
 
 	InsulinDiaryModel.find({
 		user: mongoose.Types.ObjectId(user),
+
+		createdAt: {
+			$gte: moment(date).startOf("day"),
+			$lt: moment(date).endOf("day"),
+		},
 	})
 		.populate("type")
 		.then((insulinList) => {
 			res.send(insulinList);
+		})
+		.catch((err) => {
+			res.status(500).send({
+				ok: false,
+				message:
+					"No se ha podido obtener los datos del diario de insulina del día " +
+					moment(date).format("DD-MM-YYYY"),
+			});
+		});
+};
+
+exports.getGlucoseDiaryByDate = (req, res) => {
+	var user = req.headers.user;
+	var { date } = req.body;
+
+	GlucoseDiaryModel.findOne({
+		user: mongoose.Types.ObjectId(user),
+
+		createdAt: {
+			$gte: moment(date).startOf("day"),
+			$lt: moment(date).endOf("day"),
+		},
+	})
+		.populate("glucoseList")
+		.then((glucoseDiary) => {
+			res.send(glucoseDiary?.glucoseList);
 		})
 		.catch((err) => {
 			res.status(500).send({
@@ -75,7 +106,7 @@ exports.saveGlucose = (req, res) => {
 	let date = new Date();
 
 	var newModel = new GlucoseModel({
-		value: glucose,
+		glucose: glucose,
 		comments: comments,
 	});
 
@@ -107,8 +138,15 @@ exports.saveGlucose = (req, res) => {
 					res,
 					false
 				);
+			} else {
+				res.send(
+					new ActionResponseModel({
+						message: "¡Guardado con éxito!",
+						prize: 1,
+						name: "Registro de glucosa",
+					})
+				);
 			}
-
 			// if (result.length == 0) {
 			// 	if (glucose >= 65 && glucose <= 75) {
 			// 		ActionModel.findOne({ type: 1 }, (actionErr, actionRes) => {
@@ -299,7 +337,7 @@ exports.saveInsulin = (req, res) => {
 /**************** PRIVATE FUNCTIONS ****************/
 exports.manageRequiredActions = (actionType, user, res, fulfilled) => {
 	ActionResponseModel.findOne({ type: actionType }).then((actionRes) => {
-		if (actionRes.nexAction) {
+		if (actionRes.nextAction) {
 			var newAction = new RequiredActionModel({
 				type: actionRes._id,
 				user: user,
@@ -309,6 +347,11 @@ exports.manageRequiredActions = (actionType, user, res, fulfilled) => {
 
 			newAction.save();
 		}
+
+		if (!actionRes)
+			actionRes = new ActionResponseModel({
+				message: "¡Guardado con éxito!",
+			});
 
 		res.send(actionRes);
 	});
