@@ -69,7 +69,7 @@ exports.getFavourites = (req, res) => {
 	})
 		.populate("food")
 		.then((favList) => {
-			res.send(favList.food);
+			res.send(favList ? favList.food : null);
 		})
 		.catch((err) => {
 			res.status(500).send({

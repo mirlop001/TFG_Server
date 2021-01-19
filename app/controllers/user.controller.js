@@ -23,34 +23,26 @@ exports.saveCoins = function (req, res) {
 };
 
 exports.getUserInformation = (req, res) => {
-	let user = req.headers.user;
+	let user = mongoose.Types.ObjectId(req.headers.user);
 
-	UserModel.findById(user, (err, result) => {
-		if (result) {
-
-			RequiredActions
-				.find({ user: user, fulfilled: false })
-				.populate("type")
-				.then((resultActions) => {
-					if (resultActions) {
-						result.requiredActions = resultActions.map((action) => {
-							var type = action.type;
-							type.createdAt = action.createdAt;
-
-							return type;
-						});
-					}
-
-					res.send(result);
+	UserModel.findOne({ _id: user })
+		.populate({
+			path: "currentAction",
+			match: { fulfilled: false },
+			options: {
+				path: "type",
+			},
+		})
+		.then((result) => {
+			if (result) {
+				res.send(result);
+			} else {
+				res.status(500).send({
+					ok: false,
+					message: "No se ha encontrado el usuario",
 				});
-
-		} else {
-			res.status(500).send({
-				ok: false,
-				message: "No se ha encontrado el usuario",
-			});
-		}
-	});
+			}
+		});
 };
 
 exports.setRequiredAction = (req, res) => {

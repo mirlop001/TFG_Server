@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 
 const MealDiaryModel = require("../models/Meals/meal-diary");
 
+const UserModel = require("../models/User/user");
 const GlucoseModel = require("../models/Glucose/glucose");
 const GlucoseDiaryModel = require("../models/Glucose/glucose-diary");
 
@@ -13,8 +14,11 @@ const RequiredActionModel = require("../models/User/required-actions");
 const ActionResponseModel = require("../models/User/action-response");
 
 const ACTION_TYPES = {
-	GLUCOSA_AYUNAS: 1,
+	HIPOGLUCEMIA: 1,
+	GLUCOSA_AYUNAS_BIEN: 2,
 	INSULINA: 3,
+	GLUCOSA_AYUNAS_REGULAR: 4,
+	GLUCOSA_AYUNAS_MAL: 5,
 };
 
 exports.getMealsByDate = function (req, res) {
@@ -131,13 +135,17 @@ exports.saveGlucose = (req, res) => {
 		}
 	)
 		.then((result) => {
-			if (!result.lastErrorObject.updatedExisting) {
-				this.manageRequiredActions(
-					ACTION_TYPES.GLUCOSA_AYUNAS,
-					user,
-					res,
-					false
-				);
+			if (glucose < 70 || result.lastErrorObject.updatedExisting) {
+				var type;
+
+				if (glucose < 70) type = ACTION_TYPES.HIPOGLUCEMIA;
+				else if (glucose > 70 && glucose < 109)
+					type = ACTION_TYPES.GLUCOSA_AYUNAS_BIEN;
+				else if (glucose > 110 && glucose < 130)
+					type = ACTION_TYPES.GLUCOSA_AYUNAS_REGULAR;
+				else type = ACTION_TYPES.GLUCOSA_AYUNAS_MAL;
+
+				this.manageRequiredActions(type, user, res, false);
 			} else {
 				res.send(
 					new ActionResponseModel({
@@ -147,158 +155,6 @@ exports.saveGlucose = (req, res) => {
 					})
 				);
 			}
-			// if (result.length == 0) {
-			// 	if (glucose >= 65 && glucose <= 75) {
-			// 		ActionModel.findOne({ type: 1 }, (actionErr, actionRes) => {
-			// 			if (actionErr) {
-			// 				actionRes.status(500).send(actionErr);
-			// 			}
-
-			// 			if (actionRes) {
-			// 				glucoseResult.message = actionRes;
-
-			// 				var newAction = new RequiredActionModel({
-			// 					type: actionRes._id,
-			// 					user: user,
-			// 					fulfilled: false,
-			// 				});
-
-			// 				newAction.save();
-			// 			}
-			// 			res.send(glucoseResult);
-			// 		});
-			// 	} else {
-			// 		glucoseResult.message = new ActionModel({
-			// 			prize: 2,
-			// 			title: "Glucosa en ayunas",
-			// 		});
-			// 	}
-			// } else {
-			// 	let hyperglycemiaFixed =
-			// 		requiredAction && requiredAction.type == 6;
-
-			// 	if (
-			// 		hyperglycemiaFixed &&
-			// 		moment(requiredAction.createdAt).diff(moment(), "minutes") <
-			// 			15
-			// 	) {
-			// 		res.send({
-			// 			message: {
-			// 				title: "Glucemia muy pronto",
-			// 				problem: `Hummm...ha pasado ${moment(
-			// 					requiredAction.createdAt
-			// 				).diff(
-			// 					moment(),
-			// 					"minutes"
-			// 				)} min desde que aplicaste la última dosis de insulina...`,
-			// 				solution:
-			// 					"Sería recomendable esperar alrededor de unos 15 minutos",
-			// 			},
-			// 		});
-			// 	} else {
-			// 		if (glucose < 65) {
-			// 			if (hyperglycemiaFixed) {
-			// 				ActionModel.findOne(
-			// 					{ type: 7 },
-			// 					(actionErr, actionRes) => {
-			// 						if (actionErr) {
-			// 							actionRes.status(500).send(actionErr);
-			// 						}
-
-			// 						if (actionRes) {
-			// 							glucoseResult.message = actionRes;
-
-			// 							var newAction = new RequiredActionModel(
-			// 								{
-			// 									type: actionRes._id,
-			// 									user: user,
-			// 									fulfilled: true,
-			// 								}
-			// 							);
-
-			// 							newAction.save();
-			// 						}
-			// 						res.send(glucoseResult);
-			// 					}
-			// 				);
-			// 			} else {
-			// 				ActionModel.findOne(
-			// 					{ type: 2 },
-			// 					(actionErr, actionRes) => {
-			// 						if (actionErr) {
-			// 							actionRes.status(500).send(actionErr);
-			// 						}
-
-			// 						if (actionRes) {
-			// 							glucoseResult.message = actionRes;
-
-			// 							var newAction = new RequiredActionModel(
-			// 								{
-			// 									type: actionRes._id,
-			// 									user: user,
-			// 									fulfilled: false,
-			// 								}
-			// 							);
-
-			// 							newAction.save();
-			// 						}
-			// 						res.send(glucoseResult);
-			// 					}
-			// 				);
-			// 			}
-			// 		} else if (glucose >= 180) {
-			// 			ActionModel.findOne(
-			// 				{ type: 5 },
-			// 				(actionErr, actionRes) => {
-			// 					if (actionErr) {
-			// 						actionRes.status(500).send(actionErr);
-			// 					}
-
-			// 					if (actionRes) {
-			// 						actionRes.createdAt = moment();
-			// 						glucoseResult.message = actionRes;
-
-			// 						var newAction = new RequiredActionModel({
-			// 							type: actionRes._id,
-			// 							user: user,
-			// 							fulfilled: false,
-			// 						});
-
-			// 						newAction.save();
-			// 					}
-			// 					res.send(glucoseResult);
-			// 				}
-			// 			);
-			// 		} else {
-			// 			if (requiredAction) {
-			// 				if (requiredAction.type == 3) {
-			// 					RequiredActionModel.findOneAndUpdate(
-			// 						{
-			// 							user: user,
-			// 							fulfilled: false,
-			// 							type: requiredAction._id,
-			// 						},
-			// 						{ fulfilled: true }
-			// 					).then((reqActionRes) => {
-			// 						ActionModel.find({ type: 4 }).then(
-			// 							(action) => {
-			// 								glucoseResult.message = action;
-			// 								res.send(finalResponse);
-			// 							}
-			// 						);
-			// 					});
-			// 				}
-			// 			} else {
-			// 				glucoseResult.message = new ActionModel({
-			// 					prize: 5,
-			// 					title: "Registro de glucemia correcta",
-			// 				});
-
-			// 				res.send(glucoseResult);
-			// 			}
-			// 		}
-			// 	}
-			// }
 		})
 		.catch((err) => {
 			res.status(500).send({
@@ -336,22 +192,67 @@ exports.saveInsulin = (req, res) => {
 
 /**************** PRIVATE FUNCTIONS ****************/
 exports.manageRequiredActions = (actionType, user, res, fulfilled) => {
+	let userId = mongoose.Types.ObjectId(user);
+
 	ActionResponseModel.findOne({ type: actionType }).then((actionRes) => {
-		if (actionRes.nextAction) {
-			var newAction = new RequiredActionModel({
-				type: actionRes._id,
-				user: user,
-				fulfilled: fulfilled,
-				status: actionRes.status,
-			});
+		let newAction;
 
-			newAction.save();
-		}
-
-		if (!actionRes)
+		if (!actionRes || !actionRes.isAction) {
 			actionRes = new ActionResponseModel({
-				message: "¡Guardado con éxito!",
+				message: actionRes.message,
 			});
+		} else {
+			RequiredActionModel.findOneAndUpdate(
+				{
+					user: userId,
+					fulfilled: false,
+				},
+
+				{ fulfilled: true }
+			)
+				.then((previousActionResponse) => {
+					if (!fulfilled) {
+						newAction = new RequiredActionModel({
+							type: actionRes._id,
+							user: userId,
+							fulfilled: fulfilled,
+							status: actionRes.status,
+						});
+
+						newAction.save();
+					} else {
+						if (actionRes.nextAction) {
+							ActionResponseModel.findOne({
+								type: actionRes.nextAction,
+							}).then((nextActionResponse) => {
+								newAction = new RequiredActionModel({
+									type: nextActionResponse._id,
+									user: userId,
+									fulfilled: false,
+									status: nextActionResponse.status,
+								});
+
+								newAction.save();
+								res.send();
+							});
+						}
+					}
+				})
+				.catch((err) => {
+					res.status(500).send(
+						"Error al guardar accióin pendiente: " + err
+					);
+				});
+
+			UserModel.findOne({ _id: userId }).then((userResponse) => {
+				userResponse.coins += actionRes.prize;
+
+				if (userResponse.currentAction !== newAction)
+					userResponse.currentAction = newAction;
+
+				userResponse.save();
+			});
+		}
 
 		res.send(actionRes);
 	});

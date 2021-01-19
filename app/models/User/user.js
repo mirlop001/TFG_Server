@@ -38,8 +38,9 @@ var schema = new mongoose.Schema(
 			default: 0,
 		},
 
-		requiredActions: {
-			type: [{ type: mongoose.Types.ObjectId, ref: "actiontypes" }],
+		currentAction: {
+			type: mongoose.Types.ObjectId,
+			ref: "required_actions",
 		},
 	},
 	{ timestamps: true }
