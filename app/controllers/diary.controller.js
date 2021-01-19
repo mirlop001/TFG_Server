@@ -2,6 +2,7 @@ const moment = require("moment");
 const mongoose = require("mongoose");
 
 const MealDiaryModel = require("../models/Meals/meal-diary");
+const MealModel = require("../models/Meals/meal");
 
 const UserModel = require("../models/User/user");
 const GlucoseModel = require("../models/Glucose/glucose");
@@ -14,11 +15,13 @@ const RequiredActionModel = require("../models/User/required-actions");
 const ActionResponseModel = require("../models/User/action-response");
 
 const ACTION_TYPES = {
-	HIPOGLUCEMIA: 1,
+	HYPOGLYCEMIA: 1,
 	GLUCOSA_AYUNAS_BIEN: 2,
 	INSULINA: 3,
 	GLUCOSA_AYUNAS_REGULAR: 4,
 	GLUCOSA_AYUNAS_MAL: 5,
+	HYPOGLYCEMIA_CARBS: 6,
+	HYPOGLYCEMIA_WRONG_CARBS: 8,
 };
 
 exports.getMealsByDate = function (req, res) {
@@ -135,17 +138,26 @@ exports.saveGlucose = (req, res) => {
 		}
 	)
 		.then((result) => {
+			if (result.lastErrorObject.updatedExisting)
+				if (glucose > 70 && glucose < 250)
+					manageRequiredActions(
+						ACTION_TYPES.HYPOGLYCEMIA_CARBS,
+						user,
+						res,
+						true
+					);
+
 			if (glucose < 70 || result.lastErrorObject.updatedExisting) {
 				var type;
 
-				if (glucose < 70) type = ACTION_TYPES.HIPOGLUCEMIA;
+				if (glucose < 70) type = ACTION_TYPES.HYPOGLYCEMIA;
 				else if (glucose > 70 && glucose < 109)
 					type = ACTION_TYPES.GLUCOSA_AYUNAS_BIEN;
 				else if (glucose > 110 && glucose < 130)
 					type = ACTION_TYPES.GLUCOSA_AYUNAS_REGULAR;
 				else type = ACTION_TYPES.GLUCOSA_AYUNAS_MAL;
 
-				this.manageRequiredActions(type, user, res, false);
+				manageRequiredActions(type, user, res, false);
 			} else {
 				res.send(
 					new ActionResponseModel({
@@ -184,14 +196,80 @@ exports.saveInsulin = (req, res) => {
 
 	try {
 		newEntry.save();
-		this.manageRequiredActions(ACTION_TYPES.INSULINA, user, res);
+		manageRequiredActions(ACTION_TYPES.INSULINA, user, res);
 	} catch (err) {
 		res.status(500).send(err);
 	}
 };
 
+exports.saveMeal = (req, res) => {
+	let user = req.headers.user;
+	let { meals, mealType } = req.body;
+	let newMealList = [];
+	let date = new Date();
+	let totalCarbs = 0;
+
+	meals.forEach((meal) => {
+		let foodItem = meal.foodItem ? meal.foodItem._id : null;
+
+		if (meal.grams) {
+			let mealItem = new MealModel({
+				foodItem: foodItem,
+				grams: meal.grams,
+				user: user,
+			});
+
+			totalCarbs += meal.grams;
+
+			mealItem.save();
+			newMealList.push(mealItem);
+		}
+	});
+
+	MealDiaryModel.findOneAndUpdate(
+		{
+			user: mongoose.Types.ObjectId(user),
+
+			createdAt: {
+				$gte: moment(date).startOf("day"),
+				$lt: moment(date).endOf("day"),
+			},
+
+			mealType: mealType,
+		},
+		{
+			mealList: newMealList,
+		},
+		{
+			new: true,
+			upsert: true,
+			rawResult: true,
+		}
+	)
+		.then((result) => {
+			if (totalCarbs > 20 || totalCarbs < 13)
+				manageRequiredActions(
+					ACTION_TYPES.HYPOGLYCEMIA_WRONG_CARBS,
+					user,
+					res
+				);
+			else
+				manageRequiredActions(
+					ACTION_TYPES.HYPOGLYCEMIA,
+					user,
+					res,
+					true
+				);
+		})
+		.catch((err) => {
+			res.status(500).send({
+				message: `Se ha producido un error al guardar el diario: ${err}`,
+			});
+		});
+};
+
 /**************** PRIVATE FUNCTIONS ****************/
-exports.manageRequiredActions = (actionType, user, res, fulfilled) => {
+manageRequiredActions = (actionType, user, res, fulfilled) => {
 	let userId = mongoose.Types.ObjectId(user);
 
 	ActionResponseModel.findOne({ type: actionType }).then((actionRes) => {
@@ -220,6 +298,7 @@ exports.manageRequiredActions = (actionType, user, res, fulfilled) => {
 						});
 
 						newAction.save();
+						updateUserAction(userId, newAction, actionRes, res);
 					} else {
 						if (actionRes.nextAction) {
 							ActionResponseModel.findOne({
@@ -233,7 +312,13 @@ exports.manageRequiredActions = (actionType, user, res, fulfilled) => {
 								});
 
 								newAction.save();
-								res.send();
+
+								updateUserAction(
+									userId,
+									newAction,
+									nextActionResponse,
+									res
+								);
 							});
 						}
 					}
@@ -243,17 +328,22 @@ exports.manageRequiredActions = (actionType, user, res, fulfilled) => {
 						"Error al guardar accióin pendiente: " + err
 					);
 				});
-
-			UserModel.findOne({ _id: userId }).then((userResponse) => {
-				userResponse.coins += actionRes.prize;
-
-				if (userResponse.currentAction !== newAction)
-					userResponse.currentAction = newAction;
-
-				userResponse.save();
-			});
 		}
-
-		res.send(actionRes);
 	});
+};
+
+updateUserAction = (userId, newAction, actionRes, res) => {
+	UserModel.findOne({ _id: userId })
+		.then((userResponse) => {
+			userResponse.coins += actionRes.prize;
+
+			if (userResponse.currentAction !== newAction)
+				userResponse.currentAction = newAction;
+
+			userResponse.save();
+			res.send(actionRes);
+		})
+		.catch((err) => {
+			res.status(500).send("Error al actualizar el usuario: " + err);
+		});
 };

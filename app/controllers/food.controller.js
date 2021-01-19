@@ -4,8 +4,6 @@ const moment = require("moment");
 const FavouriteFood = require("../models/Food/favourite-food");
 const FoodModel = require("../models/Food/food");
 const FoodCategoryModel = require("../models/Food/food-category");
-const MealModel = require("../models/Meals/meal");
-const MealDiaryModel = require("../models/Meals/meal-diary");
 
 //Get food list
 exports.getFoodList = (req, res) => {
@@ -105,58 +103,6 @@ exports.saveFavourites = (req, res) => {
 				message:
 					err.message ||
 					"An error occured while retrieving food types.",
-			});
-		});
-};
-
-exports.saveMeal = (req, res) => {
-	let user = req.headers.user;
-	let { meals, mealType } = req.body;
-	let newMealList = [];
-	let date = new Date();
-
-	meals.forEach((meal) => {
-		let foodItem = meal.foodItem ? meal.foodItem._id : null;
-
-		if (meal.grams) {
-			let mealItem = new MealModel({
-				foodItem: foodItem,
-				grams: meal.grams,
-				user: user,
-			});
-
-			mealItem.save();
-			newMealList.push(mealItem);
-		}
-	});
-
-	MealDiaryModel.findOneAndUpdate(
-		{
-			user: mongoose.Types.ObjectId(user),
-
-			createdAt: {
-				$gte: moment(date).startOf("day"),
-				$lt: moment(date).endOf("day"),
-			},
-
-			mealType: mealType,
-		},
-		{
-			mealList: newMealList,
-		},
-		{
-			new: true,
-			upsert: true,
-			rawResult: true,
-		}
-	)
-		.then((result) => {
-			console.log(result.lastErrorObject.updatedExisting);
-			res.send(result);
-		})
-		.catch((err) => {
-			res.status(500).send({
-				message: `Se ha producido un error al guardar el diario: ${err}`,
 			});
 		});
 };
