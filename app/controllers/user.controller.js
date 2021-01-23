@@ -33,6 +33,12 @@ exports.getUserInformation = (req, res) => {
 				path: "type",
 			},
 		})
+		.populate({
+			path: "customItems",
+			populate: {
+				path: "item",
+			},
+		})
 		.then((result) => {
 			if (result) {
 				res.send(result);

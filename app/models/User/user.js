@@ -42,6 +42,13 @@ var schema = new mongoose.Schema(
 			type: mongoose.Types.ObjectId,
 			ref: "required_actions",
 		},
+
+		customItems: [
+			{
+				type: mongoose.Types.ObjectId,
+				ref: "user_custom_items",
+			},
+		],
 	},
 	{ timestamps: true }
 );
