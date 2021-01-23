@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const UserModel = require("../models/User/user");
+const UserCustomItemModel = require("../models/User/user-custom-item");
 const RequiredActions = require("../models/User/required-actions");
 
 exports.saveCoins = function (req, res) {
@@ -37,6 +38,9 @@ exports.getUserInformation = (req, res) => {
 			path: "customItems",
 			populate: {
 				path: "item",
+				populate: {
+					path: "type",
+				},
 			},
 		})
 		.then((result) => {
@@ -84,4 +88,32 @@ exports.setRequiredAction = (req, res) => {
 			}
 		}
 	);
+};
+
+exports.saveCustomItems = (req, res) => {
+	let userId = mongoose.Types.ObjectId(req.headers.user);
+	let customItems = req.body.customItems;
+
+	let customItemChanges = customItems.map((customItem) => {
+		let userItem = new UserCustomItemModel({
+			item: customItem._id,
+			inUse: customItem.inUse,
+		});
+
+		userItem.save();
+
+		return userItem;
+	});
+
+	UserModel.findOneAndUpdate(
+		{ _id: userId },
+		{ customItems: customItemChanges },
+		{ new: true, upsert: true }
+	)
+		.then((user) => {
+			res.send(customItemChanges);
+		})
+		.catch((err) => {
+			res.status(500).send("Usuario no encontrado: " + err);
+		});
 };

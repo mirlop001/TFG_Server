@@ -23,8 +23,6 @@ exports.getCustomItems = (req, res) => {
 	CustomItemModel.find()
 		.populate("type")
 		.then((result) => {
-			console.log(result);
-
 			UserModel.findOne({ _id: userId })
 				.populate({
 					path: "customItems",
