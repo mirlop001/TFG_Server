@@ -29,8 +29,7 @@ exports.getUserInformation = (req, res) => {
 	UserModel.findOne({ _id: user })
 		.populate({
 			path: "currentAction",
-			match: { fulfilled: false },
-			options: {
+			populate: {
 				path: "type",
 			},
 		})

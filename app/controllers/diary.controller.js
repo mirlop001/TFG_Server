@@ -109,8 +109,11 @@ exports.getGlucoseDiaryByDate = (req, res) => {
 
 exports.saveGlucose = (req, res) => {
 	let user = req.headers.user;
-	let { glucose, comments } = req.body;
+	let { glucoseData, requiredAction } = req.body;
 	let date = new Date();
+
+	let glucose = glucoseData.glucose;
+	let comments = glucoseData.comments;
 
 	var newModel = new GlucoseModel({
 		glucose: glucose,
@@ -141,6 +144,7 @@ exports.saveGlucose = (req, res) => {
 			if (result.lastErrorObject.updatedExisting)
 				if (glucose > 70 && glucose < 250)
 					manageRequiredActions(
+						requiredAction,
 						ACTION_TYPES.HYPOGLYCEMIA_CARBS,
 						user,
 						res,
@@ -157,7 +161,7 @@ exports.saveGlucose = (req, res) => {
 					type = ACTION_TYPES.GLUCOSA_AYUNAS_REGULAR;
 				else type = ACTION_TYPES.GLUCOSA_AYUNAS_MAL;
 
-				manageRequiredActions(type, user, res, false);
+				manageRequiredActions(requiredAction, type, user, res, false);
 			} else {
 				res.send(
 					new ActionResponseModel({
@@ -186,7 +190,7 @@ exports.getInsulinTypes = (req, res) => {
 
 exports.saveInsulin = (req, res) => {
 	var user = mongoose.Types.ObjectId(req.headers.user);
-	var { type, quantity } = req.body;
+	var { type, quantity, requiredAction } = req.body;
 
 	var newEntry = new InsulinDiaryModel({
 		type: type,
@@ -196,7 +200,7 @@ exports.saveInsulin = (req, res) => {
 
 	try {
 		newEntry.save();
-		manageRequiredActions(ACTION_TYPES.INSULINA, user, res);
+		manageRequiredActions(requiredAction, ACTION_TYPES.INSULINA, user, res);
 	} catch (err) {
 		res.status(500).send(err);
 	}
@@ -204,7 +208,7 @@ exports.saveInsulin = (req, res) => {
 
 exports.saveMeal = (req, res) => {
 	let user = req.headers.user;
-	let { meals, mealType } = req.body;
+	let { meals, mealType, requiredAction } = req.body;
 	let newMealList = [];
 	let date = new Date();
 	let totalCarbs = 0;
@@ -249,12 +253,14 @@ exports.saveMeal = (req, res) => {
 		.then((result) => {
 			if (totalCarbs > 20 || totalCarbs < 13)
 				manageRequiredActions(
+					requiredAction,
 					ACTION_TYPES.HYPOGLYCEMIA_WRONG_CARBS,
 					user,
 					res
 				);
 			else
 				manageRequiredActions(
+					requiredAction,
 					ACTION_TYPES.HYPOGLYCEMIA,
 					user,
 					res,
@@ -269,65 +275,87 @@ exports.saveMeal = (req, res) => {
 };
 
 /**************** PRIVATE FUNCTIONS ****************/
-manageRequiredActions = (actionType, user, res, fulfilled) => {
+manageRequiredActions = (currentAction, actionType, user, res, fulfilled) => {
 	let userId = mongoose.Types.ObjectId(user);
 
 	ActionResponseModel.findOne({ type: actionType }).then((actionRes) => {
 		let newAction;
 
 		if (!actionRes || !actionRes.isAction) {
-			actionRes = new ActionResponseModel({
-				message: actionRes.message,
-			});
-		} else {
-			RequiredActionModel.findOneAndUpdate(
-				{
-					user: userId,
-					fulfilled: false,
-				},
+			let newResponse;
 
-				{ fulfilled: true }
-			)
-				.then((previousActionResponse) => {
-					if (!fulfilled) {
-						newAction = new RequiredActionModel({
-							type: actionRes._id,
-							user: userId,
-							fulfilled: fulfilled,
-							status: actionRes.status,
-						});
-
-						newAction.save();
-						updateUserAction(userId, newAction, actionRes, res);
-					} else {
-						if (actionRes.nextAction) {
-							ActionResponseModel.findOne({
-								type: actionRes.nextAction,
-							}).then((nextActionResponse) => {
-								newAction = new RequiredActionModel({
-									type: nextActionResponse._id,
-									user: userId,
-									fulfilled: false,
-									status: nextActionResponse.status,
-								});
-
-								newAction.save();
-
-								updateUserAction(
-									userId,
-									newAction,
-									nextActionResponse,
-									res
-								);
-							});
-						}
-					}
-				})
-				.catch((err) => {
-					res.status(500).send(
-						"Error al guardar accióin pendiente: " + err
-					);
+			if (actionRes.prize) {
+				newResponse = new ActionResponseModel({
+					name: actionRes.name,
+					prize: actionRes.prize,
 				});
+			} else {
+				newResponse = new ActionResponseModel({
+					message: actionRes.message,
+				});
+			}
+
+			res.send(newResponse);
+		} else {
+			if (
+				!actionRes.prevAction ||
+				(actionRes.prevAction &&
+					currentAction &&
+					actionRes.prevAction == currentAction.type)
+			) {
+				RequiredActionModel.findOneAndUpdate(
+					{
+						user: userId,
+						fulfilled: false,
+					},
+
+					{ fulfilled: true }
+				)
+					.then((previousActionResponse) => {
+						if (!fulfilled) {
+							newAction = new RequiredActionModel({
+								type: actionRes._id,
+								user: userId,
+								fulfilled: fulfilled,
+								status: actionRes.status,
+							});
+
+							newAction.save();
+							updateUserAction(userId, newAction, actionRes, res);
+						} else {
+							if (actionRes.nextAction) {
+								ActionResponseModel.findOne({
+									type: actionRes.nextAction,
+								}).then((nextActionResponse) => {
+									newAction = new RequiredActionModel({
+										type: nextActionResponse._id,
+										user: userId,
+										fulfilled: false,
+										status: nextActionResponse.status,
+									});
+
+									newAction.save();
+
+									updateUserAction(
+										userId,
+										newAction,
+										nextActionResponse,
+										res
+									);
+								});
+							}
+						}
+					})
+					.catch((err) => {
+						res.status(500).send(
+							"Error al guardar acción pendiente: " + err
+						);
+					});
+			} else {
+				res.send({
+					message: "¡Guardado correctamente!",
+				});
+			}
 		}
 	});
 };

@@ -14,6 +14,7 @@ var schema = new mongoose.Schema(
 		status: { type: String },
 		isAction: { type: Boolean },
 		nextAction: { type: Number },
+		prevAction: { type: Number },
 	},
 	{ timestamps: true }
 );
