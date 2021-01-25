@@ -15,13 +15,14 @@ const RequiredActionModel = require("../models/User/required-actions");
 const ActionResponseModel = require("../models/User/action-response");
 
 const ACTION_TYPES = {
-	HYPOGLYCEMIA: 1,
-	GLUCOSA_AYUNAS_BIEN: 2,
-	INSULINA: 3,
-	GLUCOSA_AYUNAS_REGULAR: 4,
-	GLUCOSA_AYUNAS_MAL: 5,
-	HYPOGLYCEMIA_CARBS: 6,
-	HYPOGLYCEMIA_WRONG_CARBS: 8,
+	HIPOGLUCEMIA: 1,
+	INSULINA: 2,
+	GLUCOSA_AYUNAS_BIEN: 3,
+	HIPOGLUCEMIA_HC: 4,
+	HIPOGLUCEMIA_CORREGIDA: 5,
+	FALTA_GLUCOSA_AYUNAS: 6,
+	HIPERGLUCEMIA: 7,
+	HIPERGLUCEMIA_CORREGIDA: 8,
 };
 
 exports.getMealsByDate = function (req, res) {
@@ -120,8 +121,6 @@ exports.saveGlucose = (req, res) => {
 		comments: comments,
 	});
 
-	newModel.save();
-
 	GlucoseDiaryModel.findOneAndUpdate(
 		{
 			user: mongoose.Types.ObjectId(user),
@@ -141,36 +140,14 @@ exports.saveGlucose = (req, res) => {
 		}
 	)
 		.then((result) => {
-			if (result.lastErrorObject.updatedExisting)
-				if (glucose > 70 && glucose < 250)
-					manageRequiredActions(
-						requiredAction,
-						ACTION_TYPES.HYPOGLYCEMIA_CARBS,
-						user,
-						res,
-						true
-					);
-
-			if (glucose < 70 || result.lastErrorObject.updatedExisting) {
-				var type;
-
-				if (glucose < 70) type = ACTION_TYPES.HYPOGLYCEMIA;
-				else if (glucose > 70 && glucose < 109)
-					type = ACTION_TYPES.GLUCOSA_AYUNAS_BIEN;
-				else if (glucose > 110 && glucose < 130)
-					type = ACTION_TYPES.GLUCOSA_AYUNAS_REGULAR;
-				else type = ACTION_TYPES.GLUCOSA_AYUNAS_MAL;
-
-				manageRequiredActions(requiredAction, type, user, res, false);
-			} else {
-				res.send(
-					new ActionResponseModel({
-						message: "¡Guardado con éxito!",
-						prize: 1,
-						name: "Registro de glucosa",
-					})
-				);
-			}
+			manageFirstGlycemia(
+				!result.lastErrorObject.updatedExisting,
+				user,
+				date,
+				newModel,
+				requiredAction,
+				res
+			);
 		})
 		.catch((err) => {
 			res.status(500).send({
@@ -251,21 +228,20 @@ exports.saveMeal = (req, res) => {
 		}
 	)
 		.then((result) => {
-			if (totalCarbs > 20 || totalCarbs < 13)
-				manageRequiredActions(
-					requiredAction,
-					ACTION_TYPES.HYPOGLYCEMIA_WRONG_CARBS,
-					user,
-					res
-				);
-			else
-				manageRequiredActions(
-					requiredAction,
-					ACTION_TYPES.HYPOGLYCEMIA,
+			if (requiredAction) {
+				getAndInsertRequiredAction(
+					ACTION_TYPES.HIPOGLUCEMIA_HC,
+					totalCarbs > 20 || totalCarbs < 13
+						? "Humm...Has tomado más raciones de las recomendadas"
+						: null,
+					null,
 					user,
 					res,
-					true
+					requiredAction
 				);
+			} else {
+				res.send({ message: "¡Guardado correctamente!" });
+			}
 		})
 		.catch((err) => {
 			res.status(500).send({
@@ -275,91 +251,6 @@ exports.saveMeal = (req, res) => {
 };
 
 /**************** PRIVATE FUNCTIONS ****************/
-manageRequiredActions = (currentAction, actionType, user, res, fulfilled) => {
-	let userId = mongoose.Types.ObjectId(user);
-
-	ActionResponseModel.findOne({ type: actionType }).then((actionRes) => {
-		let newAction;
-
-		if (!actionRes || !actionRes.isAction) {
-			let newResponse;
-
-			if (actionRes.prize) {
-				newResponse = new ActionResponseModel({
-					name: actionRes.name,
-					prize: actionRes.prize,
-				});
-			} else {
-				newResponse = new ActionResponseModel({
-					message: actionRes.message,
-				});
-			}
-
-			res.send(newResponse);
-		} else {
-			if (
-				!actionRes.prevAction ||
-				(actionRes.prevAction &&
-					currentAction &&
-					actionRes.prevAction == currentAction.type)
-			) {
-				RequiredActionModel.findOneAndUpdate(
-					{
-						user: userId,
-						fulfilled: false,
-					},
-
-					{ fulfilled: true }
-				)
-					.then((previousActionResponse) => {
-						if (!fulfilled) {
-							newAction = new RequiredActionModel({
-								type: actionRes._id,
-								user: userId,
-								fulfilled: fulfilled,
-								status: actionRes.status,
-							});
-
-							newAction.save();
-							updateUserAction(userId, newAction, actionRes, res);
-						} else {
-							if (actionRes.nextAction) {
-								ActionResponseModel.findOne({
-									type: actionRes.nextAction,
-								}).then((nextActionResponse) => {
-									newAction = new RequiredActionModel({
-										type: nextActionResponse._id,
-										user: userId,
-										fulfilled: false,
-										status: nextActionResponse.status,
-									});
-
-									newAction.save();
-
-									updateUserAction(
-										userId,
-										newAction,
-										nextActionResponse,
-										res
-									);
-								});
-							}
-						}
-					})
-					.catch((err) => {
-						res.status(500).send(
-							"Error al guardar acción pendiente: " + err
-						);
-					});
-			} else {
-				res.send({
-					message: "¡Guardado correctamente!",
-				});
-			}
-		}
-	});
-};
-
 updateUserAction = (userId, newAction, actionRes, res) => {
 	UserModel.findOne({ _id: userId })
 		.then((userResponse) => {
@@ -374,4 +265,308 @@ updateUserAction = (userId, newAction, actionRes, res) => {
 		.catch((err) => {
 			res.status(500).send("Error al actualizar el usuario: " + err);
 		});
+};
+
+getAndSendActionMessage = (type, prize, res) => {
+	ActionResponseModel.findOne({ type: type })
+		.then((actionMessage) => {
+			if (actionMessage) {
+				let newResponse = new ActionResponseModel(actionMessage);
+
+				if (prize) newResponse.prize = prize;
+
+				res.send(newResponse);
+			}
+		})
+		.catch((err) => {
+			res.status(500).send(
+				"Error al obtener la lista de mensajes de acción: " + err
+			);
+		});
+};
+
+getAndInsertRequiredAction = (
+	type,
+	prize,
+	name,
+	user,
+	res,
+	requiredAction,
+	actionResponse
+) => {
+	let date = new Date();
+
+	if (requiredAction) {
+		ActionResponseModel.findOne({ type: type })
+			.then((newActionResponse) => {
+				//Si entra una nueva tarea (p.e: hiperglucemia tras hipoglucemia) se sobreescribe
+				if (
+					(newActionResponse.prevAction &&
+						newActionResponse.prevAction == requiredAction.type) ||
+					!newActionResponse.prevAction
+				) {
+					ActionResponseModel.findOne({ type: type })
+						.then((currentActionResponse) => {
+							RequiredActionModel.findOneAndUpdate(
+								{
+									user: user,
+									createdAt: {
+										$gte: moment(date).startOf("day"),
+										$lt: moment(date).endOf("day"),
+									},
+									fulfilled: false,
+									type: mongoose.Types.ObjectId(
+										requiredAction._id
+									),
+								},
+								{ fulfilled: true }
+							)
+								.then((oldRequiredActionUpdated) => {
+									let newRequiredAction = new RequiredActionModel(
+										{
+											type: newActionResponse._id,
+											fulfilled:
+												newActionResponse.nextAction ==
+												null,
+											user: user,
+										}
+									);
+
+									newRequiredAction.save();
+
+									updateUserAction(
+										user,
+										newRequiredAction,
+										newActionResponse,
+										res
+									);
+								})
+								.catch((err) => {
+									res.status(500).send(
+										"Error al actualizar una acción de usuario: " +
+											err
+									);
+								});
+						})
+						.catch((err) => {
+							res.status(500).send(err);
+						});
+				} else {
+					res.send({ message: "Guardado con éxito" });
+				}
+			})
+			.catch((err) => {
+				res.status.send(
+					"Error al obtener el mensaje de acción: " + err
+				);
+			});
+	} else {
+		ActionResponseModel.findOne({ type: type })
+			.then((newRequiredActionMessage) => {
+				let newRequiredAction = new RequiredActionModel({
+					fulfilled: false,
+					type: newRequiredActionMessage._id,
+					status: newRequiredActionMessage.status,
+					user: user,
+				});
+
+				newRequiredAction.save();
+
+				if (prize) {
+					newRequiredActionMessage.prize = prize;
+					newRequiredActionMessage.name = name;
+				}
+				updateUserAction(
+					user,
+					newRequiredAction,
+					newRequiredActionMessage,
+					res
+				);
+			})
+			.catch((err) => {
+				res.status.send(
+					"Error al obtener el mensaje de acción: " + err
+				);
+			});
+	}
+};
+
+manageFirstGlycemia = (isFirst, user, date, newModel, requiredAction, res) => {
+	if (isFirst) {
+		//Comprobamos si existe algún registro de comidas
+		MealDiaryModel.findOne({
+			user: mongoose.Types.ObjectId(user),
+
+			createdAt: {
+				$gte: moment(date).startOf("day"),
+				$lt: moment(date).endOf("day"),
+			},
+		})
+			.then((existsFoodMeal) => {
+				let responseNotSuccessfull = new ActionResponseModel({
+					title:
+						"No has realizado o registrado la glucemia en ayunas",
+					status: "triste.gif",
+					solution:
+						"Es recomendable realizar una glucemia en ayunas antes del desayuno y de la correspondiente dosis de insulina.",
+				});
+
+				if (!existsFoodMeal) {
+					//Si no existe registro de comidas, buscamos algún registro de insulina
+
+					InsulinDiaryModel.findOne({
+						user: mongoose.Types.ObjectId(user),
+
+						createdAt: {
+							$gte: moment(date).startOf("day"),
+							$lt: moment(date).endOf("day"),
+						},
+					})
+						.then((existsInsulinEntry) => {
+							if (!existsInsulinEntry) {
+								//Si no existe entonces es la primera glucemia del día, recompensamos:
+								//Obtenemos el último premio glucemia en ayunas
+								RequiredActionModel.findOne(
+									{ user: mongoose.Types.ObjectId(user) },
+									{},
+									{ sort: { created_at: -1 } }
+								)
+									.then((lastEarnedPrize) => {
+										let consecutiveDays = 0;
+										let currentDate = moment().add(
+											1,
+											"day"
+										);
+
+										//Si hay premio ganado, y el día es posterior al actual entonces se multiplica el número de días consecutivos * 2
+										if (
+											lastEarnedPrize &&
+											moment(lastEarnedPrize.createdAt)
+												.startOf("day")
+												.isSame(
+													currentDate.startOf("day")
+												)
+										) {
+											consecutiveDays =
+												lastEarnedPrize / 2;
+										}
+
+										let prize = (consecutiveDays + 1) * 2;
+
+										//Actualizamos el usuario con el nuevo número de monedas
+										UserModel.findOne({ _id: user })
+											.then((userResponse) => {
+												userResponse.coins += prize;
+
+												userResponse.save();
+												newModel.save();
+
+												if (newModel.glucose < 65) {
+													//La glucosa está muy baja, controlamos hipoglucemia
+													getAndInsertRequiredAction(
+														ACTION_TYPES.HIPOGLUCEMIA,
+														prize,
+														"glucemia en ayunas",
+														user,
+														res,
+														requiredAction
+													);
+												} else if (
+													newModel.glucose > 180
+												) {
+												} else {
+													//La glucosa está bien, obtenemos y mandamos mensaje de premio
+													getAndSendActionMessage(
+														ACTION_TYPES.GLUCOSA_AYUNAS_BIEN,
+														prize,
+														res
+													);
+												}
+											})
+											.catch((err) => {
+												res.status(500).send(
+													"Error al actualizar el usuario: " +
+														err
+												);
+											});
+									})
+									.catch((err) => {
+										res.status.send(
+											"Error obteniendo el último premio por glucemia en ayunas."
+										);
+									});
+							} else {
+								newModel.save();
+
+								//Se ha registrado una dosis de insulina antes que de ayunas, por lo que se notifica
+								res.send(responseNotSuccessfull);
+							}
+						})
+						.catch((err) => {
+							res.status(500).send(
+								"Error al controlar la primera glucemia del día" +
+									err
+							);
+						});
+				} else {
+					newModel.save();
+					// Se ha registrado la comida antes que la glucosa
+					res.send(responseNotSuccessfull);
+				}
+			})
+			.catch((err) => {
+				res.status(500).send(
+					"Error al controlar la primera glucemia del día" + err
+				);
+			});
+	} else {
+		if (newModel.glucose < 65) {
+			//La glucosa está muy baja, controlamos hipoglucemia
+			getAndInsertRequiredAction(
+				ACTION_TYPES.HIPOGLUCEMIA,
+				null,
+				null,
+				user,
+				res,
+				requiredAction
+			);
+		} else if (newModel.glucose > 180) {
+			getAndInsertRequiredAction(
+				ACTION_TYPES.HIPERGLUCEMIA,
+				null,
+				null,
+				user,
+				res,
+				requiredAction
+			);
+		} else {
+			if (requiredAction) {
+				if (requiredAction.type == ACTION_TYPES.HIPOGLUCEMIA_HC) {
+					getAndInsertRequiredAction(
+						ACTION_TYPES.HIPOGLUCEMIA_CORREGIDA,
+						null,
+						null,
+						user,
+						res,
+						requiredAction
+					);
+				} else {
+					getAndInsertRequiredAction(
+						ACTION_TYPES.HIPERGLUCEMIA_CORREGIDA,
+						null,
+						null,
+						user,
+						res,
+						requiredAction
+					);
+				}
+			} else {
+				let successfullResponse = new ActionResponseModel({
+					title: "¡Muy bien!",
+					message: "¡Control de glucemia guardado!",
+				});
+				res.send(successfullResponse);
+			}
+		}
+	}
 };
