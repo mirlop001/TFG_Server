@@ -3,4 +3,4 @@ public
 publish.js
 .vscode
 public/client/index.html
-config
+config/database.js
