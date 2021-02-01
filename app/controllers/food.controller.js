@@ -36,10 +36,9 @@ exports.getFoodList = (req, res) => {
 									return new FoodModel({
 										_id: foodItem._id,
 										name: foodItem.name,
-										description: foodItem.description,
+										imageSrc: foodItem.imageSrc,
 										gramsPerCarbRatio:
 											foodItem.gramsPerCarbRatio,
-										picture: foodItem.picture,
 										isFavourite: isFav,
 									});
 								}

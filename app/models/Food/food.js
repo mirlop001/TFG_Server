@@ -4,9 +4,8 @@ const tableName = "food";
 var schema = new mongoose.Schema(
 	{
 		name: { type: String, required: true, unique: true },
-		description: { type: String },
 		gramsPerCarbRatio: { type: Number, required: true },
-		picture: { type: String },
+		imageSrc: { type: String },
 	},
 	{ timestamps: true, strict: false }
 );
