@@ -10,9 +10,9 @@ if (process.env.NODE_ENV === "dev") {
 	seed = "este-es-el-seed-desarrollo";
 	token = "48h";
 } else {
-	urlDB = `${APPSETTING_URLDB}`;
-	seed = `${APPSETTING_SEED_AUTH}`;
-	token = `${APPSETTING_CADUCIDAD_TOKEN}`;
+	urlDB = process.env["URLDB"];
+	seed = process.env["SEED_AUTH"];
+	token = process.env["CADUCIDAD_TOKEN"];
 }
 
 process.env.URLDB = urlDB;
