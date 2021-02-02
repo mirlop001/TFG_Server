@@ -177,7 +177,7 @@ exports.saveInsulin = (req, res) => {
 
 	try {
 		newEntry.save();
-		manageRequiredActions(requiredAction, ACTION_TYPES.INSULINA, user, res);
+		getAndSendActionMessage(ACTION_TYPES.INSULINA, 2, res);
 	} catch (err) {
 		res.status(500).send(err);
 	}
