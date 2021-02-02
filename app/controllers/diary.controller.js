@@ -177,7 +177,7 @@ exports.saveInsulin = (req, res) => {
 
 	try {
 		newEntry.save();
-		getAndSendActionMessage(ACTION_TYPES.INSULINA, 2, res);
+		getAndSendActionMessage(user, ACTION_TYPES.INSULINA, 2, res);
 	} catch (err) {
 		res.status(500).send(err);
 	}
@@ -251,29 +251,32 @@ exports.saveMeal = (req, res) => {
 };
 
 /**************** PRIVATE FUNCTIONS ****************/
-updateUserAction = (userId, newAction, actionRes, res) => {
+updateUserAction = (userId, prize, newAction, actionRes, res) => {
 	UserModel.findOne({ _id: userId })
 		.then((userResponse) => {
-			userResponse.coins += actionRes.prize;
+			userResponse.coins += prize ? prize : actionRes.prize;
 
 			if (userResponse.currentAction !== newAction)
 				userResponse.currentAction = newAction;
 
 			userResponse.save();
-			res.send(actionRes);
+
+			if (res) res.send(actionRes);
 		})
 		.catch((err) => {
-			res.status(500).send("Error al actualizar el usuario: " + err);
+			if (res)
+				res.status(500).send("Error al actualizar el usuario: " + err);
 		});
 };
 
-getAndSendActionMessage = (type, prize, res) => {
+getAndSendActionMessage = (userId, type, prize, res) => {
 	ActionResponseModel.findOne({ type: type })
 		.then((actionMessage) => {
 			if (actionMessage) {
 				let newResponse = new ActionResponseModel(actionMessage);
 
 				if (prize) newResponse.prize = prize;
+				updateUserAction(userId, prize);
 
 				res.send(newResponse);
 			}
@@ -336,6 +339,7 @@ getAndInsertRequiredAction = (
 
 									updateUserAction(
 										user,
+										null,
 										newRequiredAction,
 										newActionResponse,
 										res
@@ -378,6 +382,7 @@ getAndInsertRequiredAction = (
 				}
 				updateUserAction(
 					user,
+					null,
 					newRequiredAction,
 					newRequiredActionMessage,
 					res
@@ -477,6 +482,7 @@ manageFirstGlycemia = (isFirst, user, date, newModel, requiredAction, res) => {
 												} else {
 													//La glucosa está bien, obtenemos y mandamos mensaje de premio
 													getAndSendActionMessage(
+														user,
 														ACTION_TYPES.GLUCOSA_AYUNAS_BIEN,
 														prize,
 														res
