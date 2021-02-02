@@ -12,7 +12,7 @@ if (process.env.NODE_ENV === "dev") {
 } else {
 	urlDB = `${APPSETTING_URLDB}`;
 	seed = `${APPSETTING_SEED_AUTH}`;
-	token = `${APP_SETTING_CADUCIDAD_TOKEN}`;
+	token = `${APPSETTING_CADUCIDAD_TOKEN}`;
 }
 
 process.env.URLDB = urlDB;
