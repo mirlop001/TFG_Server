@@ -177,7 +177,7 @@ exports.saveInsulin = (req, res) => {
 
 	try {
 		newEntry.save();
-		getAndSendActionMessage(user, ACTION_TYPES.INSULINA, 2, res);
+		res.send({ message: "Insulina guardada correctamente" });
 	} catch (err) {
 		res.status(500).send(err);
 	}
@@ -279,6 +279,10 @@ getAndSendActionMessage = (userId, type, prize, res) => {
 				updateUserAction(userId, prize);
 
 				res.send(newResponse);
+			} else {
+				res.send({
+					message: "Guardado correctamente",
+				});
 			}
 		})
 		.catch((err) => {
